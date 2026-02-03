@@ -8,3 +8,4 @@ from . import shell_tool
 from . import file_tool
 from . import app_tool
 from . import ui_tool
+from . import vision_tool

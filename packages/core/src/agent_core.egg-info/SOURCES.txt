@@ -14,6 +14,7 @@ src/core/parser.py
 src/core/rate_limiter.py
 src/core/safety.py
 src/core/schemas.py
+src/core/supabase_client.py
 src/core/utils.py
 src/core/agent/__init__.py
 src/core/agent/executor.py
@@ -37,5 +38,7 @@ src/core/agent/tools/proposal_tool.py
 src/core/agent/tools/scheduler_tool.py
 src/core/agent/tools/shell_tool.py
 src/core/agent/tools/task_tool.py
+src/core/agent/tools/ui_tool.py
+src/core/agent/tools/vision_tool.py
 src/core/db/__init__.py
 src/core/db/crud.py

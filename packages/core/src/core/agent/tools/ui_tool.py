@@ -14,7 +14,7 @@ logger = get_logger(__name__)
 pyautogui.FAILSAFE = True  # Move mouse to corner to abort
 pyautogui.PAUSE = 0.5  # Pause between actions
 
-SCREENSHOT_DIR = os.path.expanduser("~/Desktop/screenshots")
+SCREENSHOT_DIR = os.path.expanduser("/Users/ibnufajar/Documents/screenshoot")
 
 def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, Any]:
     """
@@ -32,10 +32,14 @@ def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, 
             screenshot.save(filepath)
             
             logger.info(f"Screenshot saved: {filepath}")
+            
+            # Default is NOT silent (send photo) unless silent=True
+            silent = params.get("silent", False)
+            
             return {
                 "success": True, 
                 "path": filepath,
-                "send_photo": True,  # Flag for handler to send photo
+                "send_photo": not silent,  # Only send if not silent
                 "message": "Screenshot captured"
             }
         except Exception as e:

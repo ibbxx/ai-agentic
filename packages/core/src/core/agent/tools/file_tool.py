@@ -178,5 +178,65 @@ def execute(action: str, params: Dict[str, Any], user_id: int, db: Session) -> D
         except Exception as e:
             return {"success": False, "error": str(e)}
     
+    elif action == "send":
+        # Prepare file for sending to Telegram
+        if not path:
+            return {"success": False, "error": "No path provided"}
+        
+        try:
+            if not os.path.exists(path):
+                return {"success": False, "error": f"File not found: {path}"}
+            
+            if not os.path.isfile(path):
+                return {"success": False, "error": "Can only send files, not directories"}
+            
+            size = os.path.getsize(path)
+            # Telegram limit is 50MB
+            if size > 50 * 1024 * 1024:
+                return {"success": False, "error": f"File too large ({size} bytes). Telegram max: 50MB"}
+            
+            # Return path for handler to send
+            return {
+                "success": True, 
+                "path": path,
+                "filename": os.path.basename(path),
+                "size": size,
+                "send_file": True  # Flag for handler
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    elif action == "find_latest":
+        # Find the most recent file in a directory
+        if not path:
+            return {"success": False, "error": "No directory path provided"}
+        
+        try:
+            if not os.path.isdir(path):
+                return {"success": False, "error": f"Not a directory: {path}"}
+            
+            files = []
+            for f in os.listdir(path):
+                full_path = os.path.join(path, f)
+                if os.path.isfile(full_path):
+                    files.append((full_path, os.path.getmtime(full_path)))
+            
+            if not files:
+                return {"success": False, "error": "No files in directory"}
+            
+            # Sort by modification time, newest first
+            files.sort(key=lambda x: x[1], reverse=True)
+            latest = files[0][0]
+            
+            return {
+                "success": True,
+                "path": latest,
+                "filename": os.path.basename(latest),
+                "size": os.path.getsize(latest),
+                "send_file": True  # Flag for handler to send
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
     else:
         return {"success": False, "error": f"Unknown file action: {action}"}

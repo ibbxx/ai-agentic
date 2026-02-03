@@ -25,9 +25,15 @@ cp .env.example .env
 # DATABASE_URL=...
 # OPENAI_API_KEY=... (optional)
 
-# Run with Docker
-make dev
-make migrate
+# Install dependencies
+pip install -r requirements.txt
+pip install -e packages/core
+
+# Run migrations
+alembic upgrade head
+
+# Run the bot
+python apps/bot/src/main.py
 ```
 
 ## Demo Script

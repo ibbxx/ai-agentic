@@ -29,7 +29,8 @@ def main():
         return
 
     logger.info("Starting Bot...")
-    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN)\
+        .read_timeout(30).write_timeout(30).connect_timeout(30).pool_timeout(30).build()
     
     # Setup handlers
     setup_handlers(app)

@@ -3,7 +3,7 @@ Approval Tool - Manage approval requests using Supabase.
 """
 from typing import Dict, Any
 from core.db import crud
-from core.agent.tools import task_tool, shell_tool, file_tool, app_tool, ui_tool
+from core.agent.tools import task_tool, shell_tool, file_tool, app_tool, ui_tool, vision_tool
 
 TOOL_REGISTRY = {
     "task_tool": task_tool,
@@ -11,6 +11,7 @@ TOOL_REGISTRY = {
     "file_tool": file_tool,
     "app_tool": app_tool,
     "ui_tool": ui_tool,
+    "vision_tool": vision_tool,
 }
 
 def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, Any]:
@@ -31,22 +32,18 @@ def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, 
         if request["status"] != "pending":
             return {"success": False, "error": f"Request already {request['status']}"}
         
-        # Execute the approved action
+        # Execute the approved action - NO, let the handler execute it!
+        # Just return the payload so the handler can run it with full context (photos, updates, etc)
         payload = request["action_payload_json"]
-        tool_name = payload.get("tool")
-        tool_action = payload.get("action")
-        tool_params = payload.get("params", {})
         
-        tool = TOOL_REGISTRY.get(tool_name)
-        if not tool:
-            return {"success": False, "error": f"Tool '{tool_name}' not found"}
+        crud.update_approval_status(approval_id, "approved")
         
-        try:
-            result = tool.execute(tool_action, tool_params, user_id, None)
-            crud.update_approval_status(approval_id, "approved")
-            return {"success": True, "approval_id": approval_id, "result": result}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        return {
+            "success": True, 
+            "approval_id": approval_id, 
+            "approved_payload": payload, # Return this for handler to execute
+            "message": "Approved. Executing actions..."
+        }
     
     elif action == "list":
         # List pending approvals
