@@ -103,3 +103,42 @@ class ActivityLog(Base):
     user_id = Column(String, nullable=False) 
     command = Column(String, nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+class ProposalStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    ROLLED_BACK = "ROLLED_BACK"
+
+class ImprovementProposal(Base):
+    """Stores actionable improvement suggestions from reflections."""
+    __tablename__ = "improvement_proposals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    proposal_json = Column(JSON, nullable=False)  # {rule_type, pattern, action, description}
+    source_run_id = Column(Integer, nullable=True)  # Which run generated this
+    status = Column(Enum(ProposalStatus), default=ProposalStatus.PENDING)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", backref="proposals")
+
+class ActiveRule(Base):
+    """Active behavior rules that modify parser/formatter behavior."""
+    __tablename__ = "active_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    proposal_id = Column(Integer, ForeignKey("improvement_proposals.id"), nullable=True)
+    rule_type = Column(String, nullable=False)  # alias, format_override, response_style
+    pattern = Column(String, nullable=False)  # What triggers the rule
+    action = Column(JSON, nullable=False)  # What to do {intent, format, etc}
+    priority = Column(Integer, default=0)  # Higher = checked first
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    deactivated_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", backref="active_rules")
+    proposal = relationship("ImprovementProposal", backref="rules")
+

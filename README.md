@@ -1,64 +1,178 @@
-# Telegram Agent Bot
+# AI Agentic - Telegram Task Bot
 
-This is a local-first Telegram bot agent built with Python, FastAPI, and PostgreSQL. It features task management, daily briefs, and an approval system for sensitive actions.
+A self-improving AI-powered Telegram bot for task management with approval gates, memory, and proposal system.
 
-## Technology Stack
-- **Python 3.11**
-- **FastAPI**
-- **PostgreSQL**
-- **Docker Compose**
-- **SQLAlchemy & Alembic**
-- **python-telegram-bot**
+## Features
 
-## Setup & Run Instructions
+- 🤖 **Intent Parsing** - Rule-based + LLM fallback
+- 📋 **Task Management** - Add, list, complete, delete tasks
+- ⚠️ **Approval Gate** - High-risk actions require confirmation
+- 🧠 **Memory Layer** - User preferences + reflection logging
+- 📈 **Self-Improvement** - Proposal system for learning new patterns
+- ☀️ **Daily Brief** - Scheduled morning summaries
+- 🔒 **Safety** - Rate limiting, input validation, step limits
 
-### Prerequisites
-- Docker & Docker Compose
-- A Telegram Bot Token (from @BotFather)
+## Quick Start
 
-### Configuration
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Edit `.env` and fill in your values:
-   - `TELEGRAM_BOT_TOKEN`: Your bot token.
-   - `TELEGRAM_CHAT_ID`: Your chat ID (or comma-separated IDs) for admin/approvals.
-   - `DATABASE_URL`: Setup automatically for Docker, but can be customized.
+```bash
+# Clone and setup
+git clone https://github.com/ibbxx/ai-agentic.git
+cd ai-agentic
+cp .env.example .env
 
-### Running with Docker (Recommended)
-1. Build and start the services:
-   ```bash
-   docker-compose up -d --build
-   ```
-2. The bot should now be running and polling for updates.
-3. To view logs:
-   ```bash
-   docker-compose logs -f app
-   ```
+# Edit .env with your tokens
+# TELEGRAM_BOT_TOKEN=...
+# DATABASE_URL=...
+# OPENAI_API_KEY=... (optional)
 
-### Running Locally (Development)
-1. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Start the database (you can use the docker postgres service):
-   ```bash
-   docker-compose up -d postgres
-   ```
-3. Run migrations:
-   ```bash
-   alembic upgrade head
-   ```
-4. Start the application:
-   ```bash
-   python src/main.py
-   ```
+# Run with Docker
+make dev
+make migrate
+```
 
-## Definition of Done (v0.1)
-- [ ] Telegram Bot receives messages.
-- [ ] Agent can: add task, list task, close task.
-- [ ] Daily brief automated at 07:30 (Asia/Makassar).
-- [ ] All activity logged to Postgres.
-- [ ] High-risk actions require "APPROVE <id>".
-- [ ] Unit tests for parsing & basic CRUD.
+## Demo Script
+
+Here's a walkthrough of the bot's capabilities:
+
+### 1. Add Tasks
+
+```
+You: add task beli matcha
+Bot: ✅ Task added: #1 - beli matcha
+
+You: add task review proposal kerja
+Bot: ✅ Task added: #2 - review proposal kerja
+```
+
+<!-- Screenshot: add_tasks.png -->
+
+### 2. List Tasks
+
+```
+You: list tasks
+Bot: 📋 Open Tasks:
+       1. beli matcha
+       2. review proposal kerja
+```
+
+<!-- Screenshot: list_tasks.png -->
+
+### 3. Complete a Task
+
+```
+You: done 1
+Bot: ✅ Task #1 marked as done.
+```
+
+<!-- Screenshot: done_task.png -->
+
+### 4. Daily Brief
+
+```
+You: daily brief
+Bot: ☀️ Daily Brief:
+
+     Open Tasks (1):
+       - review proposal kerja
+```
+
+<!-- Screenshot: daily_brief.png -->
+
+### 5. High-Risk Action → Approval Flow
+
+```
+You: delete task 2
+Bot: ⚠️ **Action requires approval**
+
+     • Permanently delete a task
+       To approve, type: `APPROVE 1`
+
+You: APPROVE 1
+Bot: ✅ Request #1 approved and executed.
+```
+
+<!-- Screenshot: approval_flow.png -->
+
+### 6. Preferences
+
+```
+You: my prefs
+Bot: ⚙️ **Your Preferences**
+     • Brief Time: 07:30
+     • Brief Format: detailed
+     • Timezone: Asia/Makassar
+
+You: set brief time 08:00
+Bot: ✅ Preference updated: brief_time = 08:00
+```
+
+<!-- Screenshot: preferences.png -->
+
+### 7. Proposals (Self-Improvement)
+
+```
+You: ayo kerja
+Bot: 🤖 I didn't understand: "ayo kerja"...
+
+You: proposals
+Bot: 📋 **Improvement Proposals**
+     ⏳ **#1** - Create alias for: 'ayo kerja'
+        → `approve proposal 1` or `reject proposal 1`
+
+You: approve proposal 1
+Bot: ✅ Proposal #1 approved. Rule #1 created.
+```
+
+<!-- Screenshot: proposals.png -->
+
+## Architecture
+
+```
+apps/
+├── api/          # FastAPI backend
+└── bot/          # Telegram bot
+
+packages/
+└── core/         # Shared logic
+    └── agent/
+        ├── loop.py       # Main orchestration
+        ├── intent.py     # Intent classification
+        ├── planner.py    # Execution planning
+        ├── executor.py   # Tool execution
+        ├── formatter.py  # Response formatting
+        └── tools/        # Tool implementations
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check |
+| `/metrics` | GET | Basic metrics |
+| `/v1/message` | POST | Process bot message |
+| `/tasks` | GET | List all tasks |
+
+## Safety
+
+See [docs/Safety.md](docs/Safety.md) for full guardrails documentation.
+
+Key limits:
+- Max 6 steps per agent run
+- 30s timeout per tool
+- 20 requests per minute rate limit
+- Blocked patterns: `sudo`, `rm -rf`, `DROP TABLE`, etc.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token |
+| `DATABASE_URL` | Yes | PostgreSQL connection |
+| `TELEGRAM_CHAT_ID` | No | Default chat ID |
+| `OPENAI_API_KEY` | No | For LLM fallback |
+| `OPENAI_MODEL` | No | Default: gpt-4o-mini |
+| `TIMEZONE` | No | Default: Asia/Makassar |
+
+## License
+
+MIT

@@ -1,12 +1,15 @@
 from telegram.ext import Application
 from core.config import get_settings
 from src.handlers import setup_handlers
-from src.scheduler import setup_scheduler
-import asyncio
+from src.scheduler import setup_scheduler, shutdown_scheduler
 import logging
+import signal
 
 # Configure logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
@@ -19,8 +22,19 @@ def main():
     logger.info("Starting Bot...")
     app = Application.builder().token(settings.TELEGRAM_BOT_TOKEN).build()
     
+    # Setup handlers
     setup_handlers(app)
+    
+    # Setup scheduler
     setup_scheduler(app)
+    
+    # Graceful shutdown
+    def signal_handler(sig, frame):
+        logger.info("Shutting down...")
+        shutdown_scheduler()
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     
     # Start polling
     app.run_polling()
