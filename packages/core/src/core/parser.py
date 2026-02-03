@@ -1,6 +1,6 @@
 """
 Intent Parser - Robust command parsing for agent messages.
-Supports: add task, list tasks, done, daily brief, approve, delete task, my prefs, set brief time, proposals
+Supports: tasks, preferences, proposals, computer use (shell, file, app)
 """
 import re
 from dataclasses import dataclass
@@ -20,6 +20,14 @@ class Intent(str, Enum):
     APPROVE_PROPOSAL = "approve_proposal"
     REJECT_PROPOSAL = "reject_proposal"
     ROLLBACK_PROPOSAL = "rollback_proposal"
+    # Computer use
+    RUN_COMMAND = "run_command"
+    READ_FILE = "read_file"
+    WRITE_FILE = "write_file"
+    LIST_FILES = "list_files"
+    OPEN_APP = "open_app"
+    CLOSE_APP = "close_app"
+    SCREENSHOT = "screenshot"
     UNKNOWN = "unknown"
 
 @dataclass
@@ -28,92 +36,115 @@ class ParsedIntent:
     params: dict
 
 def parse_message(text: str) -> ParsedIntent:
-    """
-    Parse user message to extract intent and parameters.
-    Case-insensitive, handles extra whitespace.
-    """
+    """Parse user message to extract intent and parameters."""
     if not text:
         return ParsedIntent(intent=Intent.UNKNOWN, params={})
     
-    # Normalize: lowercase, strip, collapse whitespace
     normalized = " ".join(text.strip().lower().split())
     
-    # Pattern: add task <title>
+    # === TASK COMMANDS ===
     add_task_match = re.match(r'^add\s+task\s+(.+)$', normalized)
     if add_task_match:
         title = text.strip()[len("add task "):].strip()
         return ParsedIntent(intent=Intent.ADD_TASK, params={"title": title})
     
-    # Pattern: list tasks
     if normalized in ["list tasks", "list task", "tasks", "show tasks"]:
         return ParsedIntent(intent=Intent.LIST_TASKS, params={})
     
-    # Pattern: done <id> or close <id> or complete <id>
     done_match = re.match(r'^(done|close|complete)\s+(\d+)$', normalized)
     if done_match:
-        task_id = int(done_match.group(2))
-        return ParsedIntent(intent=Intent.DONE_TASK, params={"task_id": task_id})
+        return ParsedIntent(intent=Intent.DONE_TASK, params={"task_id": int(done_match.group(2))})
     
-    # Pattern: delete task <id>
     delete_match = re.match(r'^delete\s+task\s+(\d+)$', normalized)
     if delete_match:
-        task_id = int(delete_match.group(1))
-        return ParsedIntent(intent=Intent.DELETE_TASK, params={"task_id": task_id})
+        return ParsedIntent(intent=Intent.DELETE_TASK, params={"task_id": int(delete_match.group(1))})
     
-    # Pattern: daily brief
     if normalized in ["daily brief", "brief", "daily", "morning brief"]:
         return ParsedIntent(intent=Intent.DAILY_BRIEF, params={})
     
-    # Pattern: approve <id> (for approvals)
     approve_match = re.match(r'^approve\s+(\d+)$', normalized)
     if approve_match:
-        approval_id = int(approve_match.group(1))
-        return ParsedIntent(intent=Intent.APPROVE, params={"approval_id": approval_id})
+        return ParsedIntent(intent=Intent.APPROVE, params={"approval_id": int(approve_match.group(1))})
     
-    # Pattern: my prefs / preferences / settings
+    # === PREFERENCE COMMANDS ===
     if normalized in ["my prefs", "my preferences", "preferences", "settings", "my settings"]:
         return ParsedIntent(intent=Intent.MY_PREFS, params={})
     
-    # Pattern: set brief time <HH:MM>
     brief_time_match = re.match(r'^set\s+brief\s+time\s+(\d{1,2}):?(\d{2})$', normalized)
     if brief_time_match:
-        hour = int(brief_time_match.group(1))
-        minute = int(brief_time_match.group(2))
-        time_str = f"{hour:02d}:{minute:02d}"
+        time_str = f"{int(brief_time_match.group(1)):02d}:{brief_time_match.group(2)}"
         return ParsedIntent(intent=Intent.SET_PREF, params={"key": "brief_time", "value": time_str})
     
-    # Pattern: set timezone <tz>
-    tz_match = re.match(r'^set\s+timezone\s+(.+)$', normalized)
-    if tz_match:
-        tz = tz_match.group(1).strip()
-        return ParsedIntent(intent=Intent.SET_PREF, params={"key": "timezone", "value": tz})
-    
-    # Pattern: set brief format <format>
-    format_match = re.match(r'^set\s+brief\s+format\s+(detailed|compact|minimal)$', normalized)
-    if format_match:
-        fmt = format_match.group(1)
-        return ParsedIntent(intent=Intent.SET_PREF, params={"key": "brief_format", "value": fmt})
-    
-    # Pattern: proposals / list proposals
+    # === PROPOSAL COMMANDS ===
     if normalized in ["proposals", "list proposals", "show proposals", "my proposals"]:
         return ParsedIntent(intent=Intent.LIST_PROPOSALS, params={})
     
-    # Pattern: approve proposal <id>
     approve_proposal_match = re.match(r'^approve\s+proposal\s+(\d+)$', normalized)
     if approve_proposal_match:
-        proposal_id = int(approve_proposal_match.group(1))
-        return ParsedIntent(intent=Intent.APPROVE_PROPOSAL, params={"proposal_id": proposal_id})
+        return ParsedIntent(intent=Intent.APPROVE_PROPOSAL, params={"proposal_id": int(approve_proposal_match.group(1))})
     
-    # Pattern: reject proposal <id>
     reject_proposal_match = re.match(r'^reject\s+proposal\s+(\d+)$', normalized)
     if reject_proposal_match:
-        proposal_id = int(reject_proposal_match.group(1))
-        return ParsedIntent(intent=Intent.REJECT_PROPOSAL, params={"proposal_id": proposal_id})
+        return ParsedIntent(intent=Intent.REJECT_PROPOSAL, params={"proposal_id": int(reject_proposal_match.group(1))})
     
-    # Pattern: rollback proposal <id>
     rollback_match = re.match(r'^rollback\s+proposal\s+(\d+)$', normalized)
     if rollback_match:
-        proposal_id = int(rollback_match.group(1))
-        return ParsedIntent(intent=Intent.ROLLBACK_PROPOSAL, params={"proposal_id": proposal_id})
+        return ParsedIntent(intent=Intent.ROLLBACK_PROPOSAL, params={"proposal_id": int(rollback_match.group(1))})
+    
+    # === COMPUTER USE COMMANDS ===
+    
+    # Run command: "run <cmd>", "jalankan <cmd>", "execute <cmd>"
+    run_match = re.match(r'^(run|jalankan|execute|exec)\s+(.+)$', normalized)
+    if run_match:
+        return ParsedIntent(intent=Intent.RUN_COMMAND, params={"command": run_match.group(2)})
+    
+    # Read file: "read file <path>", "baca file <path>", "cat <path>"
+    read_match = re.match(r'^(read file|baca file|baca|cat)\s+(.+)$', normalized)
+    if read_match:
+        return ParsedIntent(intent=Intent.READ_FILE, params={"path": read_match.group(2).strip()})
+    
+    # List files: "ls <path>", "list files <path>"
+    ls_match = re.match(r'^(ls|list files|lihat folder|lihat)\s*(.*)$', normalized)
+    if ls_match:
+        path = ls_match.group(2).strip() or "."
+        return ParsedIntent(intent=Intent.LIST_FILES, params={"path": path})
+    
+    # Open app: "buka <app>", "open <app>", "buka <site> di <browser>"
+    open_match = re.match(r'^(buka|open)\s+(.+)$', normalized)
+    if open_match:
+        app_and_file = open_match.group(2).strip()
+        
+        # If contains multi-step keywords, route to LLM
+        multi_step_keywords = ['lalu', 'terus', 'kemudian', 'kirimkan', 'kirim', 'cari', 'search', 'download']
+        if any(kw in app_and_file for kw in multi_step_keywords):
+            return ParsedIntent(intent=Intent.UNKNOWN, params={"text": text.strip()})
+        
+        # Pattern: "buka pinterest di chrome" → open chrome with URL pinterest.com
+        di_match = re.match(r'^(.+?)\s+di\s+(chrome|firefox|safari|browser)$', app_and_file, re.IGNORECASE)
+        if di_match:
+            site = di_match.group(1).strip()
+            browser = di_match.group(2).strip()
+            # Add .com if no TLD
+            if "." not in site:
+                site = f"https://{site}.com"
+            elif not site.startswith("http"):
+                site = f"https://{site}"
+            return ParsedIntent(intent=Intent.OPEN_APP, params={"app": browser, "url": site})
+        
+        # Simple app open (no "dan")
+        if " dan " not in app_and_file:
+            return ParsedIntent(intent=Intent.OPEN_APP, params={"app": app_and_file})
+        
+        # Contains "dan" = likely complex, route to LLM
+        return ParsedIntent(intent=Intent.UNKNOWN, params={"text": text.strip()})
+    
+    # Close app: "tutup <app>", "close <app>"
+    close_match = re.match(r'^(tutup|close)\s+(.+)$', normalized)
+    if close_match:
+        return ParsedIntent(intent=Intent.CLOSE_APP, params={"app": close_match.group(2).strip()})
+    
+    # Screenshot
+    if normalized in ["screenshot", "ss", "tangkap layar", "screencapture"]:
+        return ParsedIntent(intent=Intent.SCREENSHOT, params={})
     
     return ParsedIntent(intent=Intent.UNKNOWN, params={"text": text.strip()})

@@ -1,33 +1,40 @@
 """
-High-Risk Actions Configuration
+Guardrails - Define high-risk actions that require approval.
 """
 
-# Define high-risk actions that require approval
+# High-risk actions that require user approval before execution
 HIGH_RISK_ACTIONS = {
-    # Tool: [list of high-risk action names]
     "task_tool": ["delete", "delete_all", "purge"],
-    "file_tool": ["delete", "move", "overwrite"],
+    "file_tool": ["delete", "move", "overwrite", "write"],
     "email_tool": ["send", "send_bulk"],
     "external_tool": ["webhook", "http_request"],
-    "db_tool": ["drop", "truncate", "delete_all"],
+    "shell_tool": ["run"],  # ALL shell commands are high-risk
+    "app_tool": ["open", "close", "focus"],  # App control needs approval
+    "ui_tool": ["click", "type", "hotkey", "search", "press"],  # UI automation needs approval
 }
 
-def is_high_risk(tool_name: str, action: str) -> bool:
-    """
-    Check if a tool+action combination is high-risk.
-    """
-    high_risk_list = HIGH_RISK_ACTIONS.get(tool_name, [])
-    return action.lower() in [a.lower() for a in high_risk_list]
+# Risk descriptions for user display
+RISK_DESCRIPTIONS = {
+    "task_tool.delete": "Permanently delete a task",
+    "task_tool.delete_all": "Delete all tasks",
+    "task_tool.purge": "Purge completed tasks",
+    "file_tool.delete": "Delete a file or directory",
+    "file_tool.move": "Move a file or directory",
+    "file_tool.overwrite": "Overwrite an existing file",
+    "file_tool.write": "Write to a file",
+    "shell_tool.run": "Execute a terminal command",
+    "app_tool.open": "Open an application",
+    "app_tool.close": "Close an application",
+    "app_tool.focus": "Focus an application window",
+}
 
-def get_risk_description(tool_name: str, action: str) -> str:
-    """
-    Get human-readable description of the risk.
-    """
-    descriptions = {
-        ("task_tool", "delete"): "Permanently delete a task",
-        ("task_tool", "delete_all"): "Delete all tasks",
-        ("file_tool", "delete"): "Delete a file from storage",
-        ("email_tool", "send"): "Send an email to external recipient",
-        ("external_tool", "webhook"): "Make external HTTP request",
-    }
-    return descriptions.get((tool_name, action), f"Execute {action} on {tool_name}")
+def is_high_risk(tool: str, action: str) -> bool:
+    """Check if tool.action combo is high-risk."""
+    if tool in HIGH_RISK_ACTIONS:
+        return action in HIGH_RISK_ACTIONS[tool]
+    return False
+
+def get_risk_description(tool: str, action: str) -> str:
+    """Get human-readable risk description."""
+    key = f"{tool}.{action}"
+    return RISK_DESCRIPTIONS.get(key, f"Execute {action} on {tool}")

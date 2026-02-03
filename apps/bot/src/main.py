@@ -1,7 +1,16 @@
+#!/usr/bin/env python3
+import sys
+import os
+
+# Add the bot src to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project root for core package
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
 from telegram.ext import Application
 from core.config import get_settings
-from src.handlers import setup_handlers
-from src.scheduler import setup_scheduler, shutdown_scheduler
+from handlers import setup_handlers
+from scheduler import setup_scheduler, shutdown_scheduler
 import logging
 import signal
 
@@ -37,6 +46,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     # Start polling
+    logger.info("Bot is running. Press Ctrl+C to stop.")
     app.run_polling()
 
 if __name__ == "__main__":

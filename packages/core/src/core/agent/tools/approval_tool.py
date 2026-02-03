@@ -1,42 +1,57 @@
 """
-Approval Tool - Manages approval requests with ownership check.
+Approval Tool - Manage approval requests using Supabase.
 """
 from typing import Dict, Any
-from sqlalchemy.orm import Session
-from core.models import ApprovalRequest, ApprovalStatus
 from core.db import crud
-from core.agent.executor import execute_approved_action
+from core.agent.tools import task_tool, shell_tool, file_tool, app_tool, ui_tool
 
-def execute(action: str, params: Dict[str, Any], user_id: int, db: Session) -> Dict[str, Any]:
-    """
-    Execute approval-related actions.
-    Actions: approve (executes pending high-risk action)
-    """
+TOOL_REGISTRY = {
+    "task_tool": task_tool,
+    "shell_tool": shell_tool,
+    "file_tool": file_tool,
+    "app_tool": app_tool,
+    "ui_tool": ui_tool,
+}
+
+def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, Any]:
+    """Execute approval-related actions."""
+    
     if action == "approve":
         approval_id = params.get("approval_id")
         if not approval_id:
-            return {"success": False, "error": "Approval ID is required"}
+            return {"success": False, "error": "Approval ID required"}
         
-        # Use the executor's approve function which checks ownership
-        return execute_approved_action(approval_id, user_id, db)
-    
-    elif action == "reject":
-        approval_id = params.get("approval_id")
-        if not approval_id:
-            return {"success": False, "error": "Approval ID is required"}
-        
-        req = db.query(ApprovalRequest).filter(ApprovalRequest.id == approval_id).first()
-        if not req:
+        request = crud.get_approval_request(approval_id)
+        if not request:
             return {"success": False, "error": f"Request #{approval_id} not found"}
         
-        if req.user_id != user_id:
-            return {"success": False, "error": "You can only reject your own requests"}
+        if request["user_id"] != user_id:
+            return {"success": False, "error": "You can only approve your own requests"}
         
-        if req.status != ApprovalStatus.PENDING:
-            return {"success": False, "error": f"Request is already {req.status.value}"}
+        if request["status"] != "pending":
+            return {"success": False, "error": f"Request already {request['status']}"}
         
-        crud.update_approval_status(db, approval_id, ApprovalStatus.REJECTED)
-        return {"approval_id": approval_id, "success": True, "status": "rejected"}
+        # Execute the approved action
+        payload = request["action_payload_json"]
+        tool_name = payload.get("tool")
+        tool_action = payload.get("action")
+        tool_params = payload.get("params", {})
+        
+        tool = TOOL_REGISTRY.get(tool_name)
+        if not tool:
+            return {"success": False, "error": f"Tool '{tool_name}' not found"}
+        
+        try:
+            result = tool.execute(tool_action, tool_params, user_id, None)
+            crud.update_approval_status(approval_id, "approved")
+            return {"success": True, "approval_id": approval_id, "result": result}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    elif action == "list":
+        # List pending approvals
+        requests = []  # TODO: Implement list
+        return {"success": True, "requests": requests}
     
     else:
-        return {"error": f"Unknown approval action: {action}"}
+        return {"success": False, "error": f"Unknown action: {action}"}

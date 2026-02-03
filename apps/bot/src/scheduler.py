@@ -1,16 +1,14 @@
 """
-Scheduler Service - APScheduler for daily brief and scheduled tasks.
+Scheduler Service - Daily briefs using Supabase.
 """
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from telegram.ext import Application
-from sqlalchemy.orm import Session
-from core.database import SessionLocal
-from core.models import User, Task, TaskStatus
 from core.config import get_settings
-from datetime import datetime, date
-import pytz
+from core.supabase_client import get_supabase
 import logging
+import pytz
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -18,112 +16,64 @@ settings = get_settings()
 scheduler = AsyncIOScheduler()
 
 async def send_daily_brief(app: Application):
-    """
-    Generate and send daily brief to all users.
-    Runs at 07:30 in each user's timezone (default: Asia/Makassar).
-    """
-    logger.info("[Scheduler] Running daily brief job...")
-    
-    db = SessionLocal()
+    """Send daily brief to all users."""
     try:
-        users = db.query(User).all()
+        supabase = get_supabase()
+        
+        # Get all users
+        result = supabase.table("users").select("*").execute()
+        users = result.data
         
         for user in users:
+            user_id = user["id"]
+            telegram_id = user.get("telegram_user_id")
+            user_tz = user.get("timezone", "Asia/Makassar")
+            
+            if not telegram_id:
+                continue
+            
+            # Check if it's morning in user's timezone
             try:
-                await send_user_brief(app, db, user)
+                tz = pytz.timezone(user_tz)
+                now = datetime.now(tz)
+                if now.hour != 7 or now.minute > 35:
+                    continue
+            except:
+                pass
+            
+            # Get open tasks
+            tasks_result = supabase.table("tasks").select("id,title").eq("user_id", user_id).eq("status", "open").execute()
+            tasks = tasks_result.data
+            
+            if not tasks:
+                message = "☀️ Good morning! You have no open tasks."
+            else:
+                task_list = "\n".join([f"  - {t['title']}" for t in tasks[:5]])
+                message = f"☀️ Daily Brief:\n\nOpen Tasks ({len(tasks)}):\n{task_list}"
+            
+            try:
+                await app.bot.send_message(chat_id=int(telegram_id), text=message)
+                logger.info(f"Sent daily brief to {telegram_id}")
             except Exception as e:
-                logger.error(f"[Scheduler] Failed to send brief to user {user.id}: {e}")
-    finally:
-        db.close()
-
-async def send_user_brief(app: Application, db: Session, user: User):
-    """
-    Send personalized daily brief to a user.
-    """
-    # Get user's timezone
-    user_tz = user.timezone or settings.TIMEZONE
-    
-    # Check if it's 07:30 in user's timezone
-    tz = pytz.timezone(user_tz)
-    now_user = datetime.now(tz)
-    
-    # Only send if time is around 07:30 (within 5 min window for batching)
-    if not (7 <= now_user.hour <= 7 and 25 <= now_user.minute <= 35):
-        # Skip if not the right time for this user
-        return
-    
-    # Get open tasks for user
-    tasks = db.query(Task).filter(
-        Task.user_id == user.id,
-        Task.status == TaskStatus.OPEN
-    ).order_by(Task.priority.desc(), Task.due_date.asc()).all()
-    
-    if not tasks:
-        brief = "☀️ Good morning! You have no open tasks. Enjoy your day!"
-    else:
-        # Format brief
-        today = date.today()
-        
-        # Due today
-        due_today = [t for t in tasks if t.due_date and t.due_date.date() == today]
-        
-        # Top 3 by priority
-        top_priority = sorted(tasks, key=lambda t: t.priority or 0, reverse=True)[:3]
-        
-        lines = ["☀️ **Daily Brief**\n"]
-        
-        # Due today section
-        if due_today:
-            lines.append(f"📅 **Due Today ({len(due_today)})**")
-            for t in due_today:
-                lines.append(f"  • {t.title}")
-            lines.append("")
-        
-        # Top priority section
-        lines.append("⭐ **Top Priority**")
-        for t in top_priority:
-            priority_str = f"P{t.priority}" if t.priority else ""
-            due_str = f" (due: {t.due_date.strftime('%m/%d')})" if t.due_date else ""
-            lines.append(f"  • {t.title} {priority_str}{due_str}")
-        lines.append("")
-        
-        # Summary
-        lines.append(f"📋 Total open tasks: {len(tasks)}")
-        
-        brief = "\n".join(lines)
-    
-    # Send to user
-    try:
-        telegram_chat_id = user.telegram_user_id
-        await app.bot.send_message(chat_id=telegram_chat_id, text=brief)
-        logger.info(f"[Scheduler] Sent daily brief to user {user.id}")
+                logger.error(f"Failed to send brief to {telegram_id}: {e}")
+                
     except Exception as e:
-        logger.error(f"[Scheduler] Failed to send message to {user.telegram_user_id}: {e}")
+        logger.error(f"Daily brief error: {e}")
 
 def setup_scheduler(app: Application):
-    """
-    Setup APScheduler with daily brief job.
-    Runs every hour and checks each user's timezone.
-    """
-    # Run every hour to catch different timezones
-    trigger = CronTrigger(
-        minute=30,
-        timezone=pytz.timezone(settings.TIMEZONE)
-    )
-    
+    """Setup the scheduler with daily brief job."""
     scheduler.add_job(
         send_daily_brief,
-        trigger=trigger,
+        CronTrigger(minute=30),
         args=[app],
-        id="daily_brief",
+        id="send_daily_brief",
         replace_existing=True
     )
-    
     scheduler.start()
-    logger.info(f"[Scheduler] Started with daily brief at XX:30 (checking user timezones)")
+    logger.info("[Scheduler] Started with daily brief at XX:30 (checking user timezones)")
 
 def shutdown_scheduler():
-    """Gracefully shutdown scheduler."""
+    """Shutdown the scheduler."""
     if scheduler.running:
         scheduler.shutdown()
         logger.info("[Scheduler] Shutdown complete")

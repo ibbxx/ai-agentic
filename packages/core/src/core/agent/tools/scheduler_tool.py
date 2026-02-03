@@ -1,24 +1,18 @@
 """
-Scheduler Tool - Daily brief and scheduling operations.
-Currently a stub for future LLM/cron integration.
+Scheduler Tool - Daily brief using Supabase.
 """
 from typing import Dict, Any
-from sqlalchemy.orm import Session
 from core.db import crud
 
-def execute(action: str, params: Dict[str, Any], user_id: int, db: Session) -> Dict[str, Any]:
-    """
-    Execute scheduler-related actions.
-    Actions: daily_brief (stub for now)
-    """
+def execute(action: str, params: Dict[str, Any], user_id: int, db) -> Dict[str, Any]:
+    """Execute scheduler-related actions."""
+    
     if action == "daily_brief":
-        # Reuse task list for daily brief
-        tasks = crud.list_open_tasks(db, user_id)
+        tasks = crud.get_tasks_by_user(user_id, "open")
         return {
-            "tasks": [{"id": t.id, "title": t.title} for t in tasks],
-            "count": len(tasks),
-            "success": True
+            "success": True,
+            "tasks": [{"id": t["id"], "title": t["title"]} for t in tasks[:10]]
         }
     
     else:
-        return {"error": f"Unknown scheduler action: {action}"}
+        return {"success": False, "error": f"Unknown action: {action}"}

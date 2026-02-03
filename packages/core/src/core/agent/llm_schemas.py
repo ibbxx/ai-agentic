@@ -6,13 +6,17 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 
 # Allowlist of tools the LLM can reference
-ALLOWED_TOOLS = ["task_tool", "scheduler_tool", "approval_tool"]
+ALLOWED_TOOLS = [
+    "task_tool", "scheduler_tool", "approval_tool", 
+    "preference_tool", "proposal_tool",
+    "shell_tool", "file_tool", "app_tool"
+]
 
-# Blocked patterns (shell commands, dangerous operations)
+# Blocked patterns (dangerous operations)
 BLOCKED_PATTERNS = [
-    "shell", "exec", "eval", "system", "subprocess", "os.",
-    "rm ", "rm -", "sudo", "chmod", "chown", "curl", "wget",
-    "http://", "https://", "file://", "ftp://",
+    "rm -rf /", "rm -rf ~", "sudo rm", "mkfs", "dd if=",
+    ":(){ :|:", "> /dev/sda", "chmod -R 777 /",
+    "DROP TABLE", "DELETE FROM", "<script>", "javascript:",
 ]
 
 class LLMIntent(str, Enum):
@@ -22,10 +26,18 @@ class LLMIntent(str, Enum):
     DELETE_TASK = "delete_task"
     DAILY_BRIEF = "daily_brief"
     APPROVE = "approve"
+    # Computer use intents
+    RUN_COMMAND = "run_command"
+    READ_FILE = "read_file"
+    WRITE_FILE = "write_file"
+    LIST_FILES = "list_files"
+    OPEN_APP = "open_app"
+    CLOSE_APP = "close_app"
+    SCREENSHOT = "screenshot"
     UNKNOWN = "unknown"
 
 class PlanStep(BaseModel):
-    tool: str = Field(..., description="Tool to use (task_tool, scheduler_tool, approval_tool)")
+    tool: str = Field(..., description="Tool to use")
     action: str = Field(..., description="Action to perform")
     params: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the action")
     
@@ -36,26 +48,16 @@ class PlanStep(BaseModel):
             raise ValueError(f"Tool '{v}' not allowed. Must be one of: {ALLOWED_TOOLS}")
         return v
     
-    @field_validator('action')
-    @classmethod
-    def validate_action(cls, v):
-        v_lower = v.lower()
-        for pattern in BLOCKED_PATTERNS:
-            if pattern in v_lower:
-                raise ValueError(f"Blocked pattern detected in action: {pattern}")
-        return v
-    
     @field_validator('params')
     @classmethod
     def validate_params(cls, v):
-        # Check all param values for blocked patterns
         def check_value(val):
             if isinstance(val, str):
                 for pattern in BLOCKED_PATTERNS:
-                    if pattern in val.lower():
+                    if pattern in val:
                         raise ValueError(f"Blocked pattern in params: {pattern}")
             elif isinstance(val, dict):
-                for k, inner_v in val.items():
+                for inner_v in val.values():
                     check_value(inner_v)
             elif isinstance(val, list):
                 for item in val:
@@ -65,7 +67,7 @@ class PlanStep(BaseModel):
 
 class LLMResponse(BaseModel):
     intent: LLMIntent = Field(..., description="Detected intent from user message")
-    entities: Dict[str, Any] = Field(default_factory=dict, description="Extracted entities (task_id, title, etc)")
+    entities: Dict[str, Any] = Field(default_factory=dict, description="Extracted entities")
     plan_steps: List[PlanStep] = Field(default_factory=list, description="Steps to execute")
     confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Confidence score 0-1")
     
