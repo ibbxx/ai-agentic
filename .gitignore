@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+env/
+venv/
+.idea/
+.vscode/
+*.swp
+postgres_data/
